@@ -2,7 +2,7 @@
 #include <ws2tcpip.h>
 #include <iostream>
 #include <cstddef>
-#include <vector>
+
 
 #define WSA_SUC 0
 #define MSG_LEN 500
@@ -19,18 +19,16 @@ struct socket_connection{
 
 struct problem{
     //Format of problem
-    std::vector<std::vector<double>> mat;
-    std::vector<std::vector<double>> ans;
+    double mat[3][3];
     double scalar;
-    std::string command;
-
-    problem(std::vector<std::vector<double>> mat, double scalar, std::string command){
-        this->mat = mat;
+    char command[7];
+    problem(double mat[3][3], double scalar, char command[7]){
+        memcpy(this->mat, mat, sizeof(this->mat));
         this->scalar = scalar;
-        this->command = command;
+        memcpy(this->command, command, sizeof(this->command));
     }
+    problem(){}
 };
-
 
 struct data {
     int f;
@@ -73,22 +71,7 @@ DWORD WINAPI solveMsg(LPVOID param){
 
     problem* prob = (problem *) param;
     if(prob->command == "SCALAR"){
-        std::vector<std::vector<double>> res;
-        std::vector<double> temp;
-        for(int i = 0; i < prob->mat.size(); i++){
-            for(int j = 0; j < prob->mat[i].size(); j++){
-                temp.push_back(prob->mat[i][j] * prob->scalar);
-            }
-            res.push_back(temp);
-            temp.clear();
-        }
-        prob->ans = res;
-        for(int i = 0; i < prob->mat.size(); i++){
-            for(int j = 0; j < prob->mat[i].size(); j++){
-                std::cout << (prob->ans)[i][j] << "\t";
-            }
-            std::cout << "\n";
-        }
+        std::cout << "Scalar transform a matrix";
     } else {
         char* buffer = (char*)param;
         char* token = strtok(buffer, " ");
@@ -142,14 +125,22 @@ int main(){
         std::cout << "Failed to connect to server\n";
         reportErr();
     }
-    data dat;
-    recv(connection, (char *)&dat, sizeof(data), 0);
-    std::cout << "Recieved Msg: " << dat.f;
+    problem prob;
+    recv(connection, (char *)&prob, sizeof(problem), 0);
+    std::string cmd = prob.command;
+    std::cout << "Recieved Msg: " << cmd << "\n";
+    
+    for(int i = 0; i < 3; i++){
+        for(int z = 0; z < 3; z++){
+            std::cout << prob.mat[i][z] << "\t";
+        }
+        std::cout << "\n";
+    }
     /*
     socket_connection* con = new socket_connection(&connection);
     DWORD recieveID;
     HANDLE rec = CreateThread(NULL, 0, recieveMsgs, con, false, &recieveID);
-    WaitForSingleObject(rec, INFINITE);
+    WaitForSingleObject(rec, INFINITE); 
     
     
     DWORD solveID;
