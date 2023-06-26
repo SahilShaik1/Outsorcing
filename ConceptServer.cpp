@@ -9,18 +9,17 @@
 #define BIND_SUC 0
 #define LIST_SUC 0
 #define MAX_CONNECTIONS 1
-
 struct problem{
     //Format of problem
-    std::vector<std::vector<double>> mat;
+    double mat[3][3];
     double scalar;
-    std::string command;
-
-    problem(std::vector<std::vector<double>> mat, double scalar, std::string command){
-        this->mat = mat;
+    char command[7];
+    problem(double m[3][3], double scalar, char command[7]){
+        memcpy(mat, m, sizeof(mat));
         this->scalar = scalar;
-        this->command = command;
+        memcpy(this->command, command, sizeof(this->command));
     }
+    problem(){}
 };
 
 static void reportErr(SOCKET* s = NULL, std::vector<SOCKET*> workers = {NULL}){
@@ -52,7 +51,8 @@ struct data {
 
 int main() {
     WORD verReq = MAKEWORD(2, 2);
-    std::string ip = "127.0.0.1";
+    //10.0.0.193
+    const std::string ip = "10.0.0.193";
     unsigned short const port = 55555;
     WSAData wsaDataHolder;
     
@@ -124,9 +124,11 @@ int main() {
             reportErr(&connection, workers);
         }
     }
+    double mat[3][3] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+    char b[7] = "SCALAR";
+    problem prob(mat, 12, b);
 
-    data dat(3);
-    send(*workers[0], (char *)&dat, sizeof(data), 0);
+    send(*workers[0], (char *)&prob, sizeof(problem), 0);
     /*
     std::vector<std::vector<double>> matrix = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
     for(int i = 0; i < workers.size(); i++){
