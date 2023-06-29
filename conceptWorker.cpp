@@ -7,16 +7,6 @@
 #define WSA_SUC 0
 #define MSG_LEN 500
 
-
-struct socket_connection{
-    SOCKET* socket;
-    char bufferRec[MSG_LEN];
-    char bufferSen[MSG_LEN];
-    socket_connection(SOCKET* socket){
-        this->socket = socket;
-    }
-};
-
 struct problem{
     //Format of problem
     double mat[3][3];
@@ -30,11 +20,27 @@ struct problem{
     problem(){}
 };
 
-struct data {
-    int f;
-    data(int f = 0){
-        this->f = f;
-    }; 
+struct solution{
+    double mat[3][3];
+    double res;
+    solution(double m[3][3], double res){
+        memcpy(this->mat, m, sizeof(this->mat));
+        this->res = res;
+    }
+    solution(){}
+};
+
+
+struct workerInfo{
+    SOCKET* socket;
+    char bufferRec[MSG_LEN];
+    char bufferSen[MSG_LEN];
+    bool active;
+    problem prob;
+    solution sol;
+    workerInfo(SOCKET* socket){
+        this->socket = socket;
+    }
 };
 
 
@@ -53,7 +59,7 @@ static void reportErr(SOCKET* s = NULL){
 
 
 DWORD WINAPI recieveMsgs(LPVOID param){
-    socket_connection* connection = (socket_connection*)param;
+    workerInfo* connection = (workerInfo*)param;
     if(recv(*(connection->socket), connection->bufferRec, sizeof(connection->bufferRec), 0) == SOCKET_ERROR){
         std::cout << "Error in recieving Message.\n";
     }
@@ -62,7 +68,7 @@ DWORD WINAPI recieveMsgs(LPVOID param){
 }
 
 DWORD WINAPI sendMsgs(LPVOID param){
-    socket_connection* connection = (socket_connection*)param;
+    workerInfo* connection = (workerInfo*)param;
     send(*(connection->socket), connection->bufferSen, sizeof(connection->bufferSen), 0);
     return 0;
 }
@@ -91,6 +97,7 @@ int main(){
     const char * ip = "127.0.0.1";
     unsigned short const port = 55555;
     WSADATA holder;
+    
 
     int wsa = WSAStartup(verReq, &holder);
     
@@ -125,44 +132,27 @@ int main(){
         std::cout << "Failed to connect to server\n";
         reportErr();
     }
-    problem prob;
-    recv(connection, (char *)&prob, sizeof(problem), 0);
-    std::string cmd = prob.command;
+    workerInfo con(&connection);
+    recv(connection, (char *)&con.prob, sizeof(problem), 0);
+    std::string cmd = con.prob.command;
     std::cout << "Recieved Msg: " << cmd << "\n";
-    
+    double mat[3][3];
     for(int i = 0; i < 3; i++){
         for(int z = 0; z < 3; z++){
-            std::cout << prob.mat[i][z] << "\t";
+            mat[i][z] = con.prob.mat[i][z] * con.prob.scalar;
+        }
+    }
+
+    solution sol(mat, -1);
+    con.sol = sol;
+    for(int i = 0; i < 3; i++){
+        for(int z = 0; z < 3; z++){
+            std::cout << con.sol.mat[i][z] << "\t";
         }
         std::cout << "\n";
     }
-    /*
-    socket_connection* con = new socket_connection(&connection);
-    DWORD recieveID;
-    HANDLE rec = CreateThread(NULL, 0, recieveMsgs, con, false, &recieveID);
-    WaitForSingleObject(rec, INFINITE); 
     
+    send(connection, (char *)&con.sol, sizeof(solution), 0);
     
-    DWORD solveID;
-    
-    
-    
-    std::string msg = con->bufferRec;
-    std::cout << "Command is " << con->bufferRec << "\n";
-    
-    if(msg == "SCALAR"){
-        char* addr;
-        recv(*(con->socket), addr, sizeof(addr), 0);
-        problem* prob = (problem *)addr;
-        std::vector<std::vector<double>> mat = prob->mat;
-        HANDLE sol = CreateThread(NULL, 0, solveMsg, prob, false, &solveID);
-        WaitForSingleObject(sol, INFINITE);
-    } else{
-        char *prob = &(con->bufferRec)[0];
-        HANDLE sol = CreateThread(NULL, 0, solveMsg, prob, false, &solveID);
-        std::cout << con->bufferRec << "\n";
-        WaitForSingleObject(sol, INFINITE);
-    }
-    */
     return 0;
 }
