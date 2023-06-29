@@ -8,19 +8,45 @@
 #define WSA_SUC 0
 #define BIND_SUC 0
 #define LIST_SUC 0
-#define MAX_CONNECTIONS 1
+#define MAX_CONNECTIONS 2
+#define MSG_LEN 500
 struct problem{
     //Format of problem
     double mat[3][3];
     double scalar;
     char command[7];
     problem(double m[3][3], double scalar, char command[7]){
-        memcpy(mat, m, sizeof(mat));
+        memcpy(this->mat, m, sizeof(this->mat));
         this->scalar = scalar;
         memcpy(this->command, command, sizeof(this->command));
     }
     problem(){}
 };
+
+
+struct solution{
+    double mat[3][3];
+    double res;
+    solution(double m[3][3], double res){
+        memcpy(this->mat, m, sizeof(this->mat));
+        this->res = res;
+    }
+    solution(){}
+};
+
+
+struct workerConnection{
+    SOCKET* socket;
+    char bufferRec[MSG_LEN];
+    char bufferSen[MSG_LEN];
+    bool active;
+    problem prob;
+    solution sol;
+    workerConnection(SOCKET* socket){
+        this->socket = socket;
+    }
+};
+
 
 static void reportErr(SOCKET* s = NULL, std::vector<SOCKET*> workers = {NULL}){
     if(s != NULL){
@@ -35,15 +61,6 @@ static void reportErr(SOCKET* s = NULL, std::vector<SOCKET*> workers = {NULL}){
     WSACleanup();
     abort();
 }
-
-
-
-struct data {
-    int f;
-    data(int f = 0){
-        this->f = f;
-    }; 
-};
 
 
 
@@ -111,44 +128,51 @@ int main() {
 
 
     std::vector<SOCKET*> workers;
-    
+    std::vector<sockaddr_in> workerInfo;
     while(workers.size() < MAX_CONNECTIONS){
         SOCKET worker;
-        sockaddr_in workerInfo;
-        worker = accept(connection, (SOCKADDR* )&workerInfo, NULL);
+        sockaddr_in workerConnectionInfo;
+        worker = accept(connection, (SOCKADDR* )&workerConnectionInfo, NULL);
         if (worker != INVALID_SOCKET){
-            std::cout << "Connected with a Client on port "<< workerInfo.sin_port << "\n";
-            workers.push_back(&worker);
+            std::cout << "Connected with a Client on port "<< workerConnectionInfo.sin_port << "\n";
+            
         } else {
             std::cout << "Failed to accept.\n";
             reportErr(&connection, workers);
         }
+        workerInfo.push_back(workerConnectionInfo);
+        workers.push_back(&worker);
     }
+    for(int i = 0; i < workers.size(); i++){
+        std::cout << "Connection ADDRESS: " << workers[i] << "\n";
+    }
+
     double mat[3][3] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
     char b[7] = "SCALAR";
-    problem prob(mat, 12, b);
 
-    send(*workers[0], (char *)&prob, sizeof(problem), 0);
-    /*
-    std::vector<std::vector<double>> matrix = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
-    for(int i = 0; i < workers.size(); i++){
-        const char* cmd = "SCALAR";
-        problem* prob = new problem(matrix, 3, cmd);
-        std::cout << "Command Ready: " << prob->command << "\n";
-        
-        char* addr = (char*)prob;
-        
-        int res = send(*(workers[i]), addr, sizeof(addr), 0);
-        if(res != sizeof(cmd)){
-            std::cout << "Error in sending Command.\n";
-            reportErr(&connection, workers);
-        } else {
-            std::cout << "Sent Command.\n";
+    for(int worker = 0; worker < workers.size(); worker++){
+        workerConnection work(workers[worker]);
+        std::cout << "Connection address: " << work.socket << "\n";
+
+        problem prob(mat, 12, b);
+
+        int s = send(*workers[worker], (char *)&prob, sizeof(problem), 0);
+        if(s != sizeof(problem)){
+            std::cout << "Error Sending to Client " << worker + 1 << "\n";
+        }
+        solution sol;
+
+        int f = recv(*workers[worker], (char *)& sol, sizeof(solution), 0);
+        if(f != sizeof(solution)){
+            std::cout << "Error Recieving to Client " << worker + 1 << "\n";
+        }
+        std::cout << "Recieved from port " << workerInfo[worker].sin_port << ":\n";
+        for(int i = 0; i < 3; i++){
+            for(int z = 0; z < 3; z++){
+                std::cout << sol.mat[i][z] << "\t";
+            }
+            std::cout << "\n";
         }
     }
-    */
-
-    
-
     return 0;
 }
